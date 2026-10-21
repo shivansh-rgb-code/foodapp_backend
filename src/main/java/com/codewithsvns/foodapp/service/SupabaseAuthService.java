@@ -52,6 +52,28 @@ public class SupabaseAuthService {
     }
 
 
+    public void updatePassword(String accessToken, String newPassword) {
+        try {
+            supabase.put()
+                    .uri("/auth/v1/user")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("password", newPassword))
+                    .retrieve()
+                    .toBodilessEntity();
+
+        } catch (RestClientResponseException ex) {
+            throw translateError(ex);
+
+        } catch (RestClientException ex) {
+            throw new AuthException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Authentication service is unreachable. Please try again."
+            );
+        }
+    }
+
+
     public Map<String, Object> signUp(String name, String email, String password) {
         return post("/auth/v1/signup", Map.of(
                 "email", normalizeEmail(email),
@@ -70,9 +92,11 @@ public class SupabaseAuthService {
                 "refresh_token", refreshToken));
     }
 
-    public void sendPasswordReset(String email) {
+    public void sendPasswordReset(String email, String codeChallenge) {
         post("/auth/v1/recover?redirect_to={redirectTo}",
-                Map.of("email", normalizeEmail(email)),
+                Map.of("email", normalizeEmail(email),
+                        "code_challenge", codeChallenge,
+                        "code_challenge_method", "s256"),
                 passwordResetRedirectUrl);
     }
 

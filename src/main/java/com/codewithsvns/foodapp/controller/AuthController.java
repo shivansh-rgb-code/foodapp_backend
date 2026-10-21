@@ -1,5 +1,6 @@
 package com.codewithsvns.foodapp.controller;
 
+
 import com.codewithsvns.foodapp.dto.AuthLoginRequest;
 import com.codewithsvns.foodapp.dto.AuthSignupRequest;
 import com.codewithsvns.foodapp.dto.ForgotPasswordRequest;
@@ -116,12 +117,18 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(
-            @Valid @RequestBody ForgotPasswordRequest request) {
+            @Valid @RequestBody ForgotPasswordRequest request,
+            HttpServletResponse response) {
+
+        String verifier = authService.generateCodeVerifier();
+        String challenge = authService.toCodeChallenge(verifier);
+
+
+        addCookie(response, SupabaseAuthService.VERIFIER_COOKIE, verifier, 3600, AUTH_PATH);
 
         try {
-            authService.sendPasswordReset(request.email());
+            authService.sendPasswordReset(request.email(), challenge);
         } catch (AuthException ex) {
-
             log.warn("Password reset request failed: {}", ex.getMessage());
         }
 
@@ -129,6 +136,30 @@ public class AuthController {
                 "If an account matches that email, password-reset instructions will be sent."));
     }
 
+
+    @GetMapping("/recovery-callback")
+    public void recoveryCallback(
+            @RequestParam(required = false) String code,
+            @CookieValue(name = SupabaseAuthService.VERIFIER_COOKIE, required = false)
+            String verifier,
+            HttpServletResponse response) throws IOException {
+
+        addCookie(response, SupabaseAuthService.VERIFIER_COOKIE, "", 0, AUTH_PATH);
+
+        if (code == null || verifier == null) {
+            redirectToLoginWithError(response,
+                    "Reset link expired or opened in a different browser. Please request a new one.");
+            return;
+        }
+
+        try {
+            Map<String, Object> session = authService.exchangeCode(code, verifier);
+            startSession(response, session);
+            response.sendRedirect(frontendUrl + "/update-password");
+        } catch (AuthException ex) {
+            redirectToLoginWithError(response, ex.getMessage());
+        }
+    }
 
     @GetMapping("/google")
     public void loginWithGoogle(HttpServletResponse response) throws IOException {
@@ -186,7 +217,7 @@ public class AuthController {
         response.sendRedirect(authService.buildSocialLoginUrl(provider, challenge));
     }
 
-    /** Creates the profile row (first login only) and stores the tokens in cookies. */
+
     private void startSession(HttpServletResponse response, Map<String, Object> session) {
         authService.createProfileIfMissing(session);
 
