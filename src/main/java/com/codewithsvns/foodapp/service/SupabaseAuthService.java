@@ -87,6 +87,21 @@ public class SupabaseAuthService {
                 "password", password));
     }
 
+    public Map<String, Object> verifySignupOtp(String email, String token) {
+        return post("/auth/v1/verify", Map.of(
+                "email", normalizeEmail(email),
+                "token", token.trim(),
+                "type", "signup"
+        ));
+    }
+
+    public void resendSignupOtp(String email) {
+        post("/auth/v1/resend", Map.of(
+                "email", normalizeEmail(email),
+                "type", "signup"
+        ));
+    }
+
     public Map<String, Object> refresh(String refreshToken) {
         return post("/auth/v1/token?grant_type=refresh_token", Map.of(
                 "refresh_token", refreshToken));

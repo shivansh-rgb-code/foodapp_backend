@@ -1,6 +1,7 @@
 package com.codewithsvns.foodapp.controller;
 
-
+import com.codewithsvns.foodapp.dto.VerifyOtpRequest;
+import com.codewithsvns.foodapp.dto.ResendOtpRequest;
 import com.codewithsvns.foodapp.dto.AuthLoginRequest;
 import com.codewithsvns.foodapp.dto.AuthSignupRequest;
 import com.codewithsvns.foodapp.dto.ForgotPasswordRequest;
@@ -61,25 +62,24 @@ public class AuthController {
 
 
 
+
+
     @PostMapping("/signup")
     public ResponseEntity<Map<String, String>> signUp(
-            @Valid @RequestBody AuthSignupRequest request,
-            HttpServletResponse response) {
+            @Valid @RequestBody AuthSignupRequest request) {
 
-        Map<String, Object> result = authService.signUp(
-                request.name().trim(), request.email(), request.password());
+        authService.signUp(
+                request.name().trim(),
+                request.email(),
+                request.password()
+        );
 
-
-        if (result.get("access_token") == null) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                    "message", "Account created. Please check your email to verify "
-                            + "your account, then log in."));
-        }
-
-        startSession(response, result);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(Map.of("message", "Account created successfully."));
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Account created. Please check your email for the verification code.",
+                "email", request.email().trim().toLowerCase()
+        ));
     }
+
 
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> logIn(
@@ -171,6 +171,35 @@ public class AuthController {
         startSocialLogin("facebook", response);
     }
 
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<Map<String, String>> verifyOtp(
+            @Valid @RequestBody VerifyOtpRequest request,
+            HttpServletResponse response) {
+
+        Map<String, Object> session = authService.verifySignupOtp(
+                request.email(),
+                request.token()
+        );
+
+        startSession(response, session);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Email verified successfully. You are now logged in."
+        ));
+    }
+
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<Map<String, String>> resendOtp(
+            @Valid @RequestBody ResendOtpRequest request) {
+
+        authService.resendSignupOtp(request.email());
+
+        return ResponseEntity.ok(Map.of(
+                "message", "If signup verification is available, a new code has been requested."
+        ));
+    }
 
     @GetMapping("/callback")
     public void socialCallback(
