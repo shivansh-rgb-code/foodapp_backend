@@ -1,5 +1,11 @@
 package com.codewithsvns.foodapp.controller;
 
+import com.codewithsvns.foodapp.dto.RestaurantSignupRequest;
+import com.codewithsvns.foodapp.dto.DeliveryPartnerSignupRequest;
+import com.codewithsvns.foodapp.model.AccountStatus;
+import com.codewithsvns.foodapp.model.UserRole;
+import com.codewithsvns.foodapp.service.RegistrationService;
+import org.springframework.web.server.ResponseStatusException;
 import com.codewithsvns.foodapp.dto.VerifyOtpRequest;
 import com.codewithsvns.foodapp.dto.ResendOtpRequest;
 import com.codewithsvns.foodapp.dto.AuthLoginRequest;
@@ -37,6 +43,7 @@ public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
+    private final RegistrationService registrationService;
     private static final long REFRESH_COOKIE_SECONDS = 60L * 60 * 24 * 30; // 30 days
     private static final long VERIFIER_COOKIE_SECONDS = 600;               // 10 minutes
     private static final String AUTH_PATH = "/api/auth";
@@ -48,11 +55,14 @@ public class AuthController {
 
     public AuthController(
             SupabaseAuthService authService,
+            RegistrationService registrationService,
             @Value("${app.frontend-url}") String frontendUrl,
             @Value("${app.cookie.secure}") boolean cookieSecure,
             @Value("${app.cookie.same-site}") String cookieSameSite) {
 
         this.authService = authService;
+        this.registrationService = registrationService;
+
         this.frontendUrl = frontendUrl.endsWith("/")
                 ? frontendUrl.substring(0, frontendUrl.length() - 1)
                 : frontendUrl;
@@ -64,18 +74,79 @@ public class AuthController {
 
 
 
+
     @PostMapping("/signup")
     public ResponseEntity<Map<String, String>> signUp(
             @Valid @RequestBody AuthSignupRequest request) {
 
-        authService.signUp(
-                request.name().trim(),
+        registrationService.signUp(
+                request.name(),
                 request.email(),
-                request.password()
+                request.password(),
+                UserRole.CUSTOMER,
+                null,
+                null
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                 "message", "Account created. Please check your email for the verification code.",
+                "email", request.email().trim().toLowerCase()
+        ));
+    }
+
+    @PostMapping("/customer/signup")
+    public ResponseEntity<Map<String, String>> customerSignup(
+            @Valid @RequestBody AuthSignupRequest request) {
+
+        registrationService.signUp(
+                request.name(),
+                request.email(),
+                request.password(),
+                UserRole.CUSTOMER,
+                null,
+                null
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Account created. Please check your email for the verification code.",
+                "email", request.email().trim().toLowerCase()
+        ));
+    }
+
+    @PostMapping("/restaurant/signup")
+    public ResponseEntity<Map<String, String>> restaurantSignup(
+            @Valid @RequestBody RestaurantSignupRequest request) {
+
+        registrationService.signUp(
+                request.name(),
+                request.email(),
+                request.password(),
+                UserRole.RESTAURANT,
+                request.restaurantName().trim(),
+                request.restaurantAddress().trim()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Restaurant account created. Please verify your email.",
+                "email", request.email().trim().toLowerCase()
+        ));
+    }
+
+    @PostMapping("/delivery/signup")
+    public ResponseEntity<Map<String, String>> deliverySignup(
+            @Valid @RequestBody DeliveryPartnerSignupRequest request) {
+
+        registrationService.signUp(
+                request.name(),
+                request.email(),
+                request.password(),
+                UserRole.DELIVERY_PARTNER,
+                null,
+                null
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Delivery partner account created. Please verify your email.",
                 "email", request.email().trim().toLowerCase()
         ));
     }
@@ -86,9 +157,56 @@ public class AuthController {
             @Valid @RequestBody AuthLoginRequest request,
             HttpServletResponse response) {
 
-        Map<String, Object> session = authService.logIn(request.email(), request.password());
+        Map<String, Object> session =
+                authService.logIn(request.email(), request.password());
+
+        registrationService.requireRole(session, UserRole.CUSTOMER);
 
         startSession(response, session);
+
+        return ResponseEntity.ok(
+                Map.of("message", "Login successful."));
+    }
+
+    @PostMapping("/customer/login")
+    public ResponseEntity<Map<String, String>> customerLogin(
+            @Valid @RequestBody AuthLoginRequest request,
+            HttpServletResponse response) {
+
+        Map<String, Object> session =
+                authService.logIn(request.email(), request.password());
+
+        registrationService.requireRole(session, UserRole.CUSTOMER);
+        startSession(response, session);
+
+        return ResponseEntity.ok(Map.of("message", "Login successful."));
+    }
+
+    @PostMapping("/restaurant/login")
+    public ResponseEntity<Map<String, String>> restaurantLogin(
+            @Valid @RequestBody AuthLoginRequest request,
+            HttpServletResponse response) {
+
+        Map<String, Object> session =
+                authService.logIn(request.email(), request.password());
+
+        registrationService.requireRole(session, UserRole.RESTAURANT);
+        startSession(response, session);
+
+        return ResponseEntity.ok(Map.of("message", "Login successful."));
+    }
+
+    @PostMapping("/delivery/login")
+    public ResponseEntity<Map<String, String>> deliveryLogin(
+            @Valid @RequestBody AuthLoginRequest request,
+            HttpServletResponse response) {
+
+        Map<String, Object> session =
+                authService.logIn(request.email(), request.password());
+
+        registrationService.requireRole(session, UserRole.DELIVERY_PARTNER);
+        startSession(response, session);
+
         return ResponseEntity.ok(Map.of("message", "Login successful."));
     }
 
@@ -103,6 +221,8 @@ public class AuthController {
         }
 
         Map<String, Object> session = authService.refresh(refreshToken);
+
+        registrationService.requireActiveProfile(session);
 
         startSession(response, session);
         return ResponseEntity.ok(Map.of("message", "Session refreshed."));
@@ -182,6 +302,7 @@ public class AuthController {
                 request.token()
         );
 
+        registrationService.completeVerifiedRegistration(session);
         startSession(response, session);
 
         return ResponseEntity.ok(Map.of(
@@ -225,6 +346,9 @@ public class AuthController {
 
         try {
             Map<String, Object> session = authService.exchangeCode(code, verifier);
+
+            authService.createProfileIfMissing(session);
+
             startSession(response, session);
             response.sendRedirect(frontendUrl + "/");
         } catch (AuthException ex) {
@@ -248,7 +372,6 @@ public class AuthController {
 
 
     private void startSession(HttpServletResponse response, Map<String, Object> session) {
-        authService.createProfileIfMissing(session);
 
         String accessToken = String.valueOf(session.get("access_token"));
         String refreshToken = String.valueOf(session.get("refresh_token"));

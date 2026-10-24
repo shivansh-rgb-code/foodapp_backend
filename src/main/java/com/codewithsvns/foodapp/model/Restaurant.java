@@ -5,11 +5,16 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "restaurants")
@@ -17,7 +22,11 @@ public class Restaurant {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private java.util.UUID id;
+    private UUID id;
+
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "owner_id", nullable = false, unique = true)
+    private UserProfile owner;
 
     @Column(nullable = false, length = 150)
     private String name;
@@ -35,9 +44,11 @@ public class Restaurant {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    protected Restaurant() {}
+    protected Restaurant() {
+    }
 
-    public Restaurant(String name, String address) {
+    public Restaurant(UserProfile owner, String name, String address) {
+        this.owner = owner;
         this.name = name;
         this.address = address;
     }
@@ -49,8 +60,12 @@ public class Restaurant {
         }
     }
 
-    public java.util.UUID getId() {
+    public UUID getId() {
         return id;
+    }
+
+    public UserProfile getOwner() {
+        return owner;
     }
 
     public String getName() {
@@ -71,5 +86,13 @@ public class Restaurant {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public void setOpen(boolean open) {
+        this.open = open;
+    }
+
+    public void setStatus(RestaurantStatus status) {
+        this.status = status;
     }
 }
