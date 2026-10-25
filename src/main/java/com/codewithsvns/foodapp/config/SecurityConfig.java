@@ -46,7 +46,11 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOrigins(
-                List.of("http://localhost:5173")
+                List.of(
+                        "http://localhost:5173",
+                        "http://localhost:5174",
+                        "https://hungry-hour-food-order-and-delivery.vercel.app"
+                )
         );
 
         configuration.setAllowedMethods(
