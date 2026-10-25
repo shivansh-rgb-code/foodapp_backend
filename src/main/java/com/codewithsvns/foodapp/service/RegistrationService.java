@@ -1,4 +1,3 @@
-
 package com.codewithsvns.foodapp.service;
 
 import com.codewithsvns.foodapp.model.AccountStatus;
@@ -51,6 +50,7 @@ public class RegistrationService {
             String restaurantAddress) {
 
         String normalizedEmail = email.trim().toLowerCase();
+        String normalizedName = name.trim();
 
         pendingRepository.findByEmail(normalizedEmail).ifPresent(pending -> {
             if (pending.isExpired()) {
@@ -63,17 +63,39 @@ public class RegistrationService {
             }
         });
 
-        Map<String, Object> result =
-                authService.signUp(name.trim(), normalizedEmail, password);
+        Map<String, Object> result = authService.signUp(
+                normalizedName,
+                normalizedEmail,
+                password
+        );
 
+        if (result == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "The authentication service returned an empty response."
+            );
+        }
+
+        // Supabase can return the user directly at the top level
+        // instead of wrapping it inside a "user" property.
         Object userObject = result.get("user");
+        Map<?, ?> user;
 
-        if (!(userObject instanceof Map<?, ?> user)
-                || user.get("id") == null
-                || user.get("email") == null) {
+        if (userObject instanceof Map<?, ?> nestedUser) {
+            user = nestedUser;
+        } else if (result.get("id") != null && result.get("email") != null) {
+            user = result;
+        } else {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Could not safely associate the signup with a user. Please retry or contact support."
+            );
+        }
+
+        if (user.get("id") == null || user.get("email") == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "The authentication service returned incomplete user information."
             );
         }
 
@@ -88,7 +110,8 @@ public class RegistrationService {
         }
 
         String returnedEmail = String.valueOf(user.get("email"))
-                .trim().toLowerCase();
+                .trim()
+                .toLowerCase();
 
         if (!normalizedEmail.equals(returnedEmail)) {
             throw new ResponseStatusException(
@@ -100,7 +123,7 @@ public class RegistrationService {
         pendingRepository.save(new PendingRegistration(
                 normalizedEmail,
                 userId,
-                name.trim(),
+                normalizedName,
                 role,
                 restaurantName,
                 restaurantAddress
@@ -131,7 +154,8 @@ public class RegistrationService {
         }
 
         String email = String.valueOf(user.get("email"))
-                .trim().toLowerCase();
+                .trim()
+                .toLowerCase();
 
         PendingRegistration pending = pendingRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -182,12 +206,17 @@ public class RegistrationService {
         pendingRepository.delete(pending);
     }
 
-    public void requireRole(Map<String, Object> session, UserRole expectedRole) {
+    public void requireRole(
+            Map<String, Object> session,
+            UserRole expectedRole) {
+
         Object userObject = session.get("user");
 
-        if (!(userObject instanceof Map<?, ?> user) || user.get("id") == null) {
+        if (!(userObject instanceof Map<?, ?> user)
+                || user.get("id") == null) {
             throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid authentication session."
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid authentication session."
             );
         }
 
@@ -196,7 +225,8 @@ public class RegistrationService {
             userId = UUID.fromString(String.valueOf(user.get("id")));
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid authentication session."
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid authentication session."
             );
         }
 
@@ -229,26 +259,34 @@ public class RegistrationService {
             userId = UUID.fromString(String.valueOf(user.get("id")));
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid user session.");
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid user session."
+            );
         }
 
         UserProfile profile = profileRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.FORBIDDEN,
-                        "Registration is incomplete. Please complete signup first."));
+                        "Registration is incomplete. Please complete signup first."
+                ));
 
         if (profile.getAccountStatus() != AccountStatus.ACTIVE) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "This account is not active.");
+                    HttpStatus.FORBIDDEN,
+                    "This account is not active."
+            );
         }
     }
 
     private Map<?, ?> getSessionUser(Map<String, Object> session) {
         Object userObject = session.get("user");
 
-        if (!(userObject instanceof Map<?, ?> user) || user.get("id") == null) {
+        if (!(userObject instanceof Map<?, ?> user)
+                || user.get("id") == null) {
             throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Invalid user session.");
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid user session."
+            );
         }
 
         return user;

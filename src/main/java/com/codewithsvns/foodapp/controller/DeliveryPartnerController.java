@@ -15,6 +15,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import com.codewithsvns.foodapp.model.OrderStatus;
+import com.codewithsvns.foodapp.repository.CustomerOrderRepository;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/delivery")
@@ -22,11 +25,14 @@ public class DeliveryPartnerController {
 
     private final DeliveryPartnerRepository deliveryPartnerRepository;
     private final RegistrationService registrationService;
+    private final CustomerOrderRepository customerOrderRepository;
 
     public DeliveryPartnerController(
             DeliveryPartnerRepository deliveryPartnerRepository,
+            CustomerOrderRepository customerOrderRepository,
             RegistrationService registrationService) {
         this.deliveryPartnerRepository = deliveryPartnerRepository;
+        this.customerOrderRepository = customerOrderRepository;
         this.registrationService = registrationService;
     }
 
@@ -68,6 +74,22 @@ public class DeliveryPartnerController {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "No delivery-partner profile is associated with this account."));
+
+        if (Boolean.TRUE.equals(request.available())) {
+            boolean hasActiveDelivery =
+                    customerOrderRepository.existsByDeliveryPartner_IdAndStatusIn(
+                            partner.getId(),
+                            List.of(
+                                    OrderStatus.READY_FOR_PICKUP,
+                                    OrderStatus.OUT_FOR_DELIVERY
+                            ));
+
+            if (hasActiveDelivery) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "You cannot mark yourself available while you have an active delivery.");
+            }
+        }
 
         partner.setAvailable(request.available());
 

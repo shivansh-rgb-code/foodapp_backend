@@ -50,7 +50,27 @@ public class OrderService {
 
     @Transactional
     public OrderResponse placeOrder(
-            UUID customerId, PlaceOrderRequest request) {
+            UUID customerId,
+            PlaceOrderRequest request) {
+
+        return placeOrder(
+                customerId,
+                request,
+                PaymentMethod.CASH_ON_DELIVERY
+        );
+    }
+
+    @Transactional
+    public OrderResponse placeOrder(
+            UUID customerId,
+            PlaceOrderRequest request,
+            PaymentMethod paymentMethod) {
+
+        if (paymentMethod == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Payment method is required");
+        }
 
         Map<String, Object> session = sessionFor(customerId);
         registrationService.requireActiveProfile(session);
@@ -58,12 +78,14 @@ public class OrderService {
 
         UserProfile customer = userProfileRepository.findById(customerId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Customer profile not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Customer profile not found"));
 
         Restaurant restaurant = restaurantRepository
                 .findById(request.restaurantId())
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Restaurant not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Restaurant not found"));
 
         if (restaurant.getStatus() != RestaurantStatus.APPROVED
                 || !restaurant.isOpen()) {
@@ -91,7 +113,8 @@ public class OrderService {
         for (OrderLineRequest line : request.items()) {
             if (line == null || line.foodItemId() == null) {
                 throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "Invalid order item");
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid order item");
             }
 
             if (line.quantity() < 1 || line.quantity() > 100) {
@@ -149,6 +172,8 @@ public class OrderService {
                         ? null : request.customerNote().trim()
         );
 
+        order.setPaymentMethod(paymentMethod);
+
         orderItems.forEach(order::addItem);
 
         return toResponse(customerOrderRepository.save(order));
@@ -176,7 +201,8 @@ public class OrderService {
         CustomerOrder order = customerOrderRepository
                 .findByIdAndCustomer_Id(orderId, customerId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"));
 
         return toResponse(order);
     }
@@ -211,7 +237,8 @@ public class OrderService {
         CustomerOrder order = customerOrderRepository
                 .findByIdAndRestaurant_Id(orderId, restaurant.getId())
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"));
 
         OrderStatus current = order.getStatus();
 
@@ -235,6 +262,7 @@ public class OrderService {
         }
 
         order.setStatus(newStatus);
+
         return toResponse(customerOrderRepository.save(order));
     }
 
@@ -249,14 +277,16 @@ public class OrderService {
 
         registrationService.requireActiveProfile(restaurantSession);
         registrationService.requireRole(
-                restaurantSession, UserRole.RESTAURANT);
+                restaurantSession,
+                UserRole.RESTAURANT);
 
         Restaurant restaurant = getRestaurant(restaurantOwnerId);
 
         CustomerOrder order = customerOrderRepository
                 .findByIdAndRestaurant_Id(orderId, restaurant.getId())
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"));
 
         if (order.getStatus() != OrderStatus.READY_FOR_PICKUP) {
             throw new ResponseStatusException(
@@ -275,7 +305,8 @@ public class OrderService {
 
         registrationService.requireActiveProfile(partnerSession);
         registrationService.requireRole(
-                partnerSession, UserRole.DELIVERY_PARTNER);
+                partnerSession,
+                UserRole.DELIVERY_PARTNER);
 
         DeliveryPartner partner = deliveryPartnerRepository
                 .findByUserProfile_Id(deliveryPartnerUserId)
@@ -302,12 +333,11 @@ public class OrderService {
     public List<OrderResponse> getAssignedOrders(
             UUID deliveryPartnerUserId) {
 
-        Map<String, Object> session =
-                sessionFor(deliveryPartnerUserId);
-
+        Map<String, Object> session = sessionFor(deliveryPartnerUserId);
         registrationService.requireActiveProfile(session);
         registrationService.requireRole(
-                session, UserRole.DELIVERY_PARTNER);
+                session,
+                UserRole.DELIVERY_PARTNER);
 
         DeliveryPartner partner = getDeliveryPartner(deliveryPartnerUserId);
 
@@ -325,15 +355,13 @@ public class OrderService {
             UUID orderId,
             OrderStatus newStatus) {
 
-        Map<String, Object> session =
-                sessionFor(deliveryPartnerUserId);
-
+        Map<String, Object> session = sessionFor(deliveryPartnerUserId);
         registrationService.requireActiveProfile(session);
         registrationService.requireRole(
-                session, UserRole.DELIVERY_PARTNER);
+                session,
+                UserRole.DELIVERY_PARTNER);
 
-        DeliveryPartner partner = getDeliveryPartner(
-                deliveryPartnerUserId);
+        DeliveryPartner partner = getDeliveryPartner(deliveryPartnerUserId);
 
         CustomerOrder order = customerOrderRepository
                 .findByIdAndDeliveryPartner_Id(orderId, partner.getId())
@@ -376,7 +404,10 @@ public class OrderService {
     }
 
     private Map<String, Object> sessionFor(UUID userId) {
-        return Map.of("user", Map.of("id", userId.toString()));
+        return Map.of(
+                "user",
+                Map.of("id", userId.toString())
+        );
     }
 
     private OrderResponse toResponse(CustomerOrder order) {
