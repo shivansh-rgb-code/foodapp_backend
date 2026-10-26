@@ -6,6 +6,7 @@ import com.codewithsvns.foodapp.dto.PaymentOrderResponse;
 import com.codewithsvns.foodapp.dto.PlaceOrderRequest;
 import com.codewithsvns.foodapp.model.CustomerOrder;
 import com.codewithsvns.foodapp.model.PaymentMethod;
+import com.codewithsvns.foodapp.model.PaymentStatus;
 import com.codewithsvns.foodapp.repository.CustomerOrderRepository;
 import com.codewithsvns.foodapp.service.OrderService;
 import com.codewithsvns.foodapp.service.RazorpayPaymentService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import com.codewithsvns.foodapp.dto.VerifyPaymentRequest;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -96,11 +98,18 @@ public class CustomerOrderController {
         String razorpayOrderId =
                 razorpayPaymentService.createRazorpayOrder(order);
 
+        CustomerOrder updatedOrder = customerOrderRepository
+                .findById(order.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"
+                ));
+
         return new PaymentOrderResponse(
-                order.getId(),
-                order.getPaymentMethod().name(),
-                order.getPaymentStatus().name(),
-                order.getTotalAmount(),
+                updatedOrder.getId(),
+                updatedOrder.getPaymentMethod().name(),
+                updatedOrder.getPaymentStatus().name(),
+                updatedOrder.getTotalAmount(),
                 "INR",
                 razorpayOrderId,
                 razorpayKeyId
@@ -141,18 +150,17 @@ public class CustomerOrderController {
                         "Order not found"
                 ));
 
-        razorpayPaymentService.verifyPayment(
-                order,
+        PaymentStatus paymentStatus = razorpayPaymentService.verifyPayment(
+                orderId,
+                customerId,
                 request.razorpayOrderId(),
                 request.razorpayPaymentId(),
-                request.razorpaySignature()
-        );
+                request.razorpaySignature());
 
-        return java.util.Map.of(
+        return Map.of(
                 "message", "Payment signature verified",
-                "orderId", order.getId().toString(),
-                "paymentStatus", order.getPaymentStatus().name()
-        );
+                "orderId", orderId.toString(),
+                "paymentStatus", paymentStatus.name());
     }
 
     private UUID getAuthenticatedCustomerId(

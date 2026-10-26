@@ -34,6 +34,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/webhooks/razorpay").permitAll()
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/docs/**", "/api/openapi/**", "/swagger-ui/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(bearerTokenResolver)

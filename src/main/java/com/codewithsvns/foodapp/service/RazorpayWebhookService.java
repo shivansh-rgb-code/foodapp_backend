@@ -56,7 +56,6 @@ public class RazorpayWebhookService {
         JSONObject event = new JSONObject(rawBody);
         String eventType = event.optString("event", "");
 
-        // Other events are acknowledged but do not change payment status.
         if (!"payment.captured".equals(eventType)) {
             return;
         }
@@ -73,7 +72,8 @@ public class RazorpayWebhookService {
 
         if (razorpayOrderId.isBlank()
                 || razorpayPaymentId.isBlank()
-                || !"captured".equals(paymentStatus)) {
+                || !"captured".equals(paymentStatus)
+                || !paymentEntity.optBoolean("captured", false)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Invalid captured-payment event"
@@ -81,7 +81,7 @@ public class RazorpayWebhookService {
         }
 
         CustomerOrder order = customerOrderRepository
-                .findByRazorpayOrderId(razorpayOrderId)
+                .findByRazorpayOrderIdForUpdate(razorpayOrderId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Order for Razorpay payment was not found"
@@ -124,7 +124,6 @@ public class RazorpayWebhookService {
             );
         }
 
-        // Repeated captured events must not change an already-paid order.
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
             if (razorpayPaymentId.equals(order.getRazorpayPaymentId())) {
                 return;

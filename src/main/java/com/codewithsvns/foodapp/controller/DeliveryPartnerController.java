@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -63,6 +63,7 @@ public class DeliveryPartnerController {
     }
 
     @PatchMapping("/me/availability")
+    @Transactional
     public DeliveryPartnerResponse updateAvailability(
             Authentication authentication,
             @Valid @RequestBody AvailabilityRequest request) {
@@ -70,7 +71,7 @@ public class DeliveryPartnerController {
         UUID userId = getAuthenticatedUserId(authentication);
 
         DeliveryPartner partner = deliveryPartnerRepository
-                .findByUserProfile_Id(userId)
+                .findByUserProfileIdForUpdate(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "No delivery-partner profile is associated with this account."));

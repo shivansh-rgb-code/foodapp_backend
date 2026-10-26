@@ -1,6 +1,7 @@
 
 package com.codewithsvns.foodapp.controller;
 
+import com.codewithsvns.foodapp.dto.AvailableDeliveryOrderResponse;
 import com.codewithsvns.foodapp.dto.OrderResponse;
 import com.codewithsvns.foodapp.model.OrderStatus;
 import com.codewithsvns.foodapp.service.OrderService;
@@ -47,6 +48,22 @@ public class DeliveryOrderController {
                 getUserId(authentication),
                 orderId,
                 request.status());
+    }
+
+    @GetMapping("/available")
+    public List<AvailableDeliveryOrderResponse> getAvailableOrders(
+            Authentication authentication) {
+        UUID userId = getUserId(authentication);
+        return orderService.getAvailableDeliveryOrders(userId);
+    }
+
+    @PostMapping("/{orderId}/accept")
+    public OrderResponse acceptOrder(
+            @PathVariable UUID orderId,
+            Authentication authentication
+    ) {
+        UUID userId = getUserId(authentication);
+        return orderService.acceptDeliveryOrder(userId, orderId);
     }
 
     private UUID getUserId(Authentication authentication) {

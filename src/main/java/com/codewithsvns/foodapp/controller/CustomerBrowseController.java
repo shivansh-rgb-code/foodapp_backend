@@ -2,6 +2,7 @@ package com.codewithsvns.foodapp.controller;
 
 import com.codewithsvns.foodapp.dto.FoodItemResponse;
 import com.codewithsvns.foodapp.model.FoodItem;
+import com.codewithsvns.foodapp.model.FoodCategory;
 import com.codewithsvns.foodapp.model.Restaurant;
 import com.codewithsvns.foodapp.model.RestaurantStatus;
 import com.codewithsvns.foodapp.repository.FoodItemRepository;
@@ -28,11 +29,11 @@ public class CustomerBrowseController {
     }
 
     @GetMapping
-    public List<RestaurantResponse> getApprovedRestaurants() {
-        return restaurantRepository.findAll()
+    public List<RestaurantResponse> getApprovedRestaurants(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean open) {
+        return restaurantRepository.searchApproved(normalizeQuery(q), open)
                 .stream()
-                .filter(restaurant ->
-                        restaurant.getStatus() == RestaurantStatus.APPROVED)
                 .map(this::toRestaurantResponse)
                 .toList();
     }
@@ -47,15 +48,24 @@ public class CustomerBrowseController {
 
     @GetMapping("/{restaurantId}/food-items")
     public List<FoodItemResponse> getAvailableFoodItems(
-            @PathVariable UUID restaurantId) {
+            @PathVariable UUID restaurantId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) FoodCategory category) {
 
         Restaurant restaurant = getApprovedRestaurant(restaurantId);
 
         return foodItemRepository
-                .findByRestaurant_IdAndAvailableTrue(restaurant.getId())
+                .searchAvailable(restaurant.getId(), category, normalizeQuery(q))
                 .stream()
                 .map(this::toFoodItemResponse)
                 .toList();
+    }
+
+    private String normalizeQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return "";
+        }
+        return query.trim();
     }
 
     private Restaurant getApprovedRestaurant(UUID restaurantId) {
