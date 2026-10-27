@@ -10,15 +10,37 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.config.Customizer;
-import java.util.List;
-import org.springframework.context.annotation.Bean;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.List;
+
 @Configuration
 public class SecurityConfig {
+
+
+    private static final String[] PUBLIC_PATHS = {
+            "/api/auth/**",
+            "/api/webhooks/razorpay",
+            "/health",
+            "/error",
+            "/api/docs/**",
+            "/api/openapi/**",
+            "/api/swagger-ui/**",
+            "/swagger-ui/**",
+            "/v3/api-docs/**"
+    };
+
+
+    private static final String[] NO_TOKEN_PREFIXES = {
+            "/api/auth/",
+            "/api/docs",
+            "/api/openapi",
+            "/api/swagger-ui",
+            "/swagger-ui",
+            "/v3/api-docs"
+    };
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
@@ -30,15 +52,12 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/webhooks/razorpay").permitAll()
-                        .requestMatchers("/health").permitAll()
-                        .requestMatchers("/error").permitAll()
-                        .requestMatchers("/api/docs/**", "/api/openapi/**", "/swagger-ui/**").permitAll()
+                        .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(bearerTokenResolver)
                         .jwt(Customizer.withDefaults()));
+
         http.cors(Customizer.withDefaults());
         return http.build();
     }
@@ -76,8 +95,13 @@ public class SecurityConfig {
 
         return request -> {
 
-            if (request.getRequestURI().startsWith("/api/auth/")) {
-                return null;
+            String uri = request.getRequestURI();
+
+
+            for (String prefix : NO_TOKEN_PREFIXES) {
+                if (uri.startsWith(prefix)) {
+                    return null;
+                }
             }
 
             String tokenFromHeader = headerResolver.resolve(request);
