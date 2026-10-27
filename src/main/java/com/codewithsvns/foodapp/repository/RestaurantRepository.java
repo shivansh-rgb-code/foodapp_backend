@@ -1,4 +1,3 @@
-
 package com.codewithsvns.foodapp.repository;
 
 import com.codewithsvns.foodapp.model.Restaurant;
@@ -19,6 +18,7 @@ public interface RestaurantRepository
             + "and (:openOnly is null or r.open = :openOnly) "
             + "and (lower(r.name) like lower(concat('%', :query, '%')) "
             + "or lower(r.address) like lower(concat('%', :query, '%')) "
+            + "or lower(coalesce(r.cuisine, '')) like lower(concat('%', :query, '%')) "
             + "or :query is null) "
             + "order by r.name")
     List<Restaurant> searchApproved(

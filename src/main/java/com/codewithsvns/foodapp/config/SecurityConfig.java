@@ -19,7 +19,6 @@ import java.util.List;
 @Configuration
 public class SecurityConfig {
 
-
     private static final String[] PUBLIC_PATHS = {
             "/api/auth/**",
             "/api/webhooks/razorpay",
@@ -28,10 +27,13 @@ public class SecurityConfig {
             "/api/docs/**",
             "/api/openapi/**",
             "/api/swagger-ui/**",
+            "/api/customer/ml/health",
+
+            "/api/customer/ml/restaurant-recommendations",
+
             "/swagger-ui/**",
             "/v3/api-docs/**"
     };
-
 
     private static final String[] NO_TOKEN_PREFIXES = {
             "/api/auth/",
@@ -43,22 +45,29 @@ public class SecurityConfig {
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   BearerTokenResolver bearerTokenResolver)
-            throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            BearerTokenResolver bearerTokenResolver
+    ) throws Exception {
 
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        .sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
-                        .anyRequest().authenticated())
+                        .anyRequest().authenticated()
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(bearerTokenResolver)
-                        .jwt(Customizer.withDefaults()));
+                        .jwt(Customizer.withDefaults())
+                );
 
         http.cors(Customizer.withDefaults());
+
         return http.build();
     }
 
@@ -75,7 +84,14 @@ public class SecurityConfig {
         );
 
         configuration.setAllowedMethods(
-                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                List.of(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                )
         );
 
         configuration.setAllowedHeaders(List.of("*"));
@@ -91,12 +107,11 @@ public class SecurityConfig {
 
     @Bean
     public BearerTokenResolver bearerTokenResolver() {
-        DefaultBearerTokenResolver headerResolver = new DefaultBearerTokenResolver();
+        DefaultBearerTokenResolver headerResolver =
+                new DefaultBearerTokenResolver();
 
         return request -> {
-
             String uri = request.getRequestURI();
-
 
             for (String prefix : NO_TOKEN_PREFIXES) {
                 if (uri.startsWith(prefix)) {
@@ -105,17 +120,21 @@ public class SecurityConfig {
             }
 
             String tokenFromHeader = headerResolver.resolve(request);
+
             if (tokenFromHeader != null) {
                 return tokenFromHeader;
             }
 
             if (request.getCookies() != null) {
                 for (Cookie cookie : request.getCookies()) {
-                    if (SupabaseAuthService.ACCESS_COOKIE.equals(cookie.getName())) {
+                    if (SupabaseAuthService.ACCESS_COOKIE.equals(
+                            cookie.getName()
+                    )) {
                         return cookie.getValue();
                     }
                 }
             }
+
             return null;
         };
     }

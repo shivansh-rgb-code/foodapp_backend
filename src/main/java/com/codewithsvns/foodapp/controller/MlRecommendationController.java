@@ -2,7 +2,7 @@
 package com.codewithsvns.foodapp.controller;
 
 import com.codewithsvns.foodapp.ml.MlApiClient;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.web.bind.annotation.*;
 
 @RestController

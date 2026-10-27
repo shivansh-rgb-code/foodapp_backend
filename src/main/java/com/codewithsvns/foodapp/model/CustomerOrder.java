@@ -50,6 +50,12 @@ public class CustomerOrder {
     @Column(name = "delivery_address", nullable = false, length = 500)
     private String deliveryAddress;
 
+    @Column(name = "delivery_latitude")
+    private Double deliveryLatitude;
+
+    @Column(name = "delivery_longitude")
+    private Double deliveryLongitude;
+
     @Column(name = "customer_note", length = 500)
     private String customerNote;
 
@@ -163,6 +169,18 @@ public class CustomerOrder {
         return deliveryAddress;
     }
 
+    public Double getDeliveryLatitude() {
+        return deliveryLatitude;
+    }
+
+    public Double getDeliveryLongitude() {
+        return deliveryLongitude;
+    }
+
+    public void setDeliveryLocation(Double latitude, Double longitude) {
+        this.deliveryLatitude = latitude;
+        this.deliveryLongitude = longitude;
+    }
 
     public String getCustomerNote() {
         return customerNote;

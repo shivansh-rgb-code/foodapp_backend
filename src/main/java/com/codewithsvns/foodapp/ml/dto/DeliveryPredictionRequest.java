@@ -1,3 +1,4 @@
+
 package com.codewithsvns.foodapp.ml.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -23,6 +24,21 @@ public record DeliveryPredictionRequest(
 
         @JsonProperty("Vehicle_condition")
         Integer vehicleCondition,
+
+        @JsonProperty("distance_km")
+        Double distanceKm,
+
+        @JsonProperty("order_hour")
+        Integer orderHour,
+
+        @JsonProperty("order_minute")
+        Integer orderMinute,
+
+        @JsonProperty("order_weekday")
+        Integer orderWeekday,
+
+        @JsonProperty("order_month")
+        Integer orderMonth,
 
         @JsonProperty("Time_Orderd")
         String timeOrdered,

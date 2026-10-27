@@ -1,4 +1,3 @@
-
 package com.codewithsvns.foodapp.model;
 
 import jakarta.persistence.Column;
@@ -50,10 +49,16 @@ public class Restaurant {
     @Column(name = "longitude")
     private Double longitude;
 
+    @Column(name = "cuisine", length = 60)
+    private String cuisine;
+
     public Restaurant(UserProfile owner, String name, String address) {
         this.owner = owner;
         this.name = name;
         this.address = address;
+    }
+
+    protected Restaurant() {
     }
 
     public Double getLatitude() {
@@ -72,10 +77,13 @@ public class Restaurant {
         this.longitude = longitude;
     }
 
-    protected Restaurant() {
+    public String getCuisine() {
+        return cuisine;
     }
 
-
+    public void setCuisine(String cuisine) {
+        this.cuisine = cuisine;
+    }
 
     @jakarta.persistence.PrePersist
     protected void onCreate() {

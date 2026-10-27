@@ -1,11 +1,12 @@
-
 package com.codewithsvns.foodapp.controller;
 
 import com.codewithsvns.foodapp.model.Restaurant;
 import com.codewithsvns.foodapp.repository.RestaurantRepository;
 import com.codewithsvns.foodapp.service.RegistrationService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -33,13 +34,20 @@ public class RestaurantController {
             Boolean open) {
     }
 
+    public record CuisineRequest(
+            @NotBlank(message = "The cuisine is required")
+            @Size(max = 60, message = "The cuisine must be at most 60 characters")
+            String cuisine) {
+    }
+
     public record RestaurantResponse(
             UUID id,
             String name,
             String address,
             boolean open,
             String status,
-            java.time.Instant createdAt) {
+            java.time.Instant createdAt,
+            String cuisine) {
     }
 
     @GetMapping("/me")
@@ -79,6 +87,24 @@ public class RestaurantController {
         return toResponse(saved);
     }
 
+    @PatchMapping("/me/cuisine")
+    public RestaurantResponse updateCuisine(
+            Authentication authentication,
+            @Valid @RequestBody CuisineRequest request) {
+
+        UUID ownerId = getAuthenticatedUserId(authentication);
+
+        Restaurant restaurant = restaurantRepository.findByOwner_Id(ownerId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No restaurant is associated with this account."));
+
+        restaurant.setCuisine(request.cuisine().trim());
+
+        Restaurant saved = restaurantRepository.save(restaurant);
+        return toResponse(saved);
+    }
+
     private UUID getAuthenticatedUserId(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(
@@ -111,6 +137,7 @@ public class RestaurantController {
                 restaurant.getAddress(),
                 restaurant.isOpen(),
                 restaurant.getStatus().name(),
-                restaurant.getCreatedAt());
+                restaurant.getCreatedAt(),
+                restaurant.getCuisine());
     }
 }

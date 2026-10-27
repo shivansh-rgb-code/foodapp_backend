@@ -1,14 +1,15 @@
-
 package com.codewithsvns.foodapp.repository;
 
 import com.codewithsvns.foodapp.model.CustomerOrder;
 import com.codewithsvns.foodapp.model.OrderStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -48,4 +49,45 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, UU
     Optional<CustomerOrder> findByIdAndCustomerIdForUpdate(
             @Param("orderId") UUID orderId,
             @Param("customerId") UUID customerId);
+
+
+
+    interface OrderEstimateInfo {
+        Double getRestaurantLatitude();
+        Double getRestaurantLongitude();
+        Double getDeliveryLatitude();
+        Double getDeliveryLongitude();
+        Instant getCreatedAt();
+        OrderStatus getStatus();
+    }
+
+    @Query("select o.restaurant.latitude as restaurantLatitude, "
+            + "o.restaurant.longitude as restaurantLongitude, "
+            + "o.deliveryLatitude as deliveryLatitude, "
+            + "o.deliveryLongitude as deliveryLongitude, "
+            + "o.createdAt as createdAt, o.status as status "
+            + "from CustomerOrder o "
+            + "where o.id = :orderId and o.customer.id = :customerId")
+    Optional<OrderEstimateInfo> findEstimateInfo(
+            @Param("orderId") UUID orderId,
+            @Param("customerId") UUID customerId);
+
+    @Query("select o.restaurant.id from CustomerOrder o "
+            + "where o.customer.id = :customerId "
+            + "and o.status = com.codewithsvns.foodapp.model.OrderStatus.DELIVERED "
+            + "group by o.restaurant.id "
+            + "order by count(o) desc, max(o.createdAt) desc")
+    List<UUID> findFavouriteRestaurantIds(
+            @Param("customerId") UUID customerId,
+            Pageable pageable);
+
+    @Query("select o.restaurant.cuisine from CustomerOrder o "
+            + "where o.customer.id = :customerId "
+            + "and o.status = com.codewithsvns.foodapp.model.OrderStatus.DELIVERED "
+            + "and o.restaurant.cuisine is not null "
+            + "group by o.restaurant.cuisine "
+            + "order by count(o) desc, max(o.createdAt) desc")
+    List<String> findTopCuisines(
+            @Param("customerId") UUID customerId,
+            Pageable pageable);
 }

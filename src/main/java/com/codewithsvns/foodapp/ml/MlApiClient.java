@@ -1,10 +1,14 @@
 package com.codewithsvns.foodapp.ml;
 
 import com.codewithsvns.foodapp.ml.dto.DeliveryPredictionRequest;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
+import java.util.Map;
 
 @Component
 public class MlApiClient {
@@ -14,8 +18,13 @@ public class MlApiClient {
     public MlApiClient(
             @Value("${ml.api.base-url}") String baseUrl
     ) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(60));
+
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(factory)
                 .build();
     }
 
@@ -32,6 +41,14 @@ public class MlApiClient {
         return restClient.post()
                 .uri("/predict-delivery")
                 .body(request)
+                .retrieve()
+                .body(JsonNode.class);
+    }
+
+    public JsonNode predictDelivery(Map<String, Object> features) {
+        return restClient.post()
+                .uri("/predict-delivery")
+                .body(features)
                 .retrieve()
                 .body(JsonNode.class);
     }
@@ -74,9 +91,7 @@ public class MlApiClient {
     ) {
         return restClient.get()
                 .uri(uriBuilder -> {
-                    uriBuilder.path(
-                            "/restaurants/previous-orders"
-                    );
+                    uriBuilder.path("/restaurants/previous-orders");
                     uriBuilder.queryParam("customer_id", customerId);
 
                     if (limit != null)

@@ -1,4 +1,3 @@
-
 package com.codewithsvns.foodapp.service;
 
 import com.codewithsvns.foodapp.dto.AvailableDeliveryOrderResponse;
@@ -7,10 +6,12 @@ import com.codewithsvns.foodapp.dto.OrderResponse;
 import com.codewithsvns.foodapp.dto.PlaceOrderRequest;
 import com.codewithsvns.foodapp.model.*;
 import com.codewithsvns.foodapp.repository.CustomerOrderRepository;
+import com.codewithsvns.foodapp.repository.DeliveryAddressLookupRepository;
 import com.codewithsvns.foodapp.repository.DeliveryPartnerRepository;
 import com.codewithsvns.foodapp.repository.FoodItemRepository;
 import com.codewithsvns.foodapp.repository.RestaurantRepository;
 import com.codewithsvns.foodapp.repository.UserProfileRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class OrderService {
     private final UserProfileRepository userProfileRepository;
     private final DeliveryPartnerRepository deliveryPartnerRepository;
     private final RegistrationService registrationService;
+    private final DeliveryAddressLookupRepository deliveryAddressLookupRepository;
 
     public OrderService(
             CustomerOrderRepository customerOrderRepository,
@@ -42,7 +44,8 @@ public class OrderService {
             RestaurantRepository restaurantRepository,
             UserProfileRepository userProfileRepository,
             DeliveryPartnerRepository deliveryPartnerRepository,
-            RegistrationService registrationService) {
+            RegistrationService registrationService,
+            DeliveryAddressLookupRepository deliveryAddressLookupRepository) {
 
         this.customerOrderRepository = customerOrderRepository;
         this.foodItemRepository = foodItemRepository;
@@ -50,6 +53,7 @@ public class OrderService {
         this.userProfileRepository = userProfileRepository;
         this.deliveryPartnerRepository = deliveryPartnerRepository;
         this.registrationService = registrationService;
+        this.deliveryAddressLookupRepository = deliveryAddressLookupRepository;
     }
 
     @Transactional
@@ -177,6 +181,12 @@ public class OrderService {
         );
 
         order.setPaymentMethod(paymentMethod);
+
+        deliveryAddressLookupRepository
+                .findCoordinates(customerId, order.getDeliveryAddress(), PageRequest.of(0, 1))
+                .stream()
+                .findFirst()
+                .ifPresent(c -> order.setDeliveryLocation(c.getLatitude(), c.getLongitude()));
 
         orderItems.forEach(order::addItem);
 
