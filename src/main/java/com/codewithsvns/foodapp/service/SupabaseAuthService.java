@@ -129,6 +129,14 @@ public class SupabaseAuthService {
         ));
     }
 
+    public Map<String, Object> verifyRecoveryOtp(String email, String token) {
+        return post("/auth/v1/verify", Map.of(
+                "email", normalizeEmail(email),
+                "token", token.trim(),
+                "type", "recovery"
+        ));
+    }
+
     public void resendSignupOtp(String email) {
         post("/auth/v1/resend", Map.of(
                 "email", normalizeEmail(email),
@@ -141,16 +149,11 @@ public class SupabaseAuthService {
                 "refresh_token", refreshToken));
     }
 
-    public void sendPasswordReset(String email, String codeChallenge) {
-        post("/auth/v1/recover?redirect_to={redirectTo}",
-                Map.of("email", normalizeEmail(email),
-                        "code_challenge", codeChallenge,
-                        "code_challenge_method", "s256"),
-                passwordResetRedirectUrl);
+    public void sendPasswordReset(String email) {
+        post("/auth/v1/recover", Map.of(
+                "email", normalizeEmail(email)
+        ));
     }
-
-
-
 
     public String generateCodeVerifier() {
         byte[] randomBytes = new byte[64];
