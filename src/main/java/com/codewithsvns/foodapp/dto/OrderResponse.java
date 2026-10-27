@@ -22,7 +22,12 @@ public record OrderResponse(
         String customerNote,
         List<OrderLineResponse> items,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant preparationStartedAt,
+        Integer estimatedPreparationMinutes,
+        Instant estimatedPreparationCompletionAt,
+        String restaurantAddress,
+        String googleMapsDirectionsUrl
 ) {
     public record OrderLineResponse(
             UUID foodItemId,
@@ -30,6 +35,5 @@ public record OrderResponse(
             BigDecimal unitPrice,
             int quantity,
             BigDecimal subtotal
-    ) {
-    }
+    ) {}
 }

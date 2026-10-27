@@ -15,13 +15,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
 
 @Service
 public class OrderService {
@@ -279,6 +281,10 @@ public class OrderService {
                     HttpStatus.CONFLICT,
                     "Cannot change order status from "
                             + current + " to " + newStatus);
+        }
+
+        if (newStatus == OrderStatus.PREPARING) {
+            order.setPreparationStartedAt(Instant.now());
         }
 
         order.setStatus(newStatus);
@@ -546,6 +552,7 @@ public class OrderService {
         );
     }
 
+
     private OrderResponse toResponse(CustomerOrder order) {
         List<OrderResponse.OrderLineResponse> lines =
                 order.getItems().stream()
@@ -561,6 +568,19 @@ public class OrderService {
                 ? null
                 : order.getDeliveryPartner().getId();
 
+        Instant preparationStartedAt = order.getPreparationStartedAt();
+
+        Integer estimatedPreparationMinutes =
+                preparationStartedAt == null ? null : 20;
+
+        Instant estimatedPreparationCompletionAt =
+                preparationStartedAt == null
+                        ? null
+                        : preparationStartedAt.plusSeconds(
+                        estimatedPreparationMinutes * 60L);
+
+        String restaurantAddress = order.getRestaurant().getAddress();
+
         return new OrderResponse(
                 order.getId(),
                 order.getCustomer().getId(),
@@ -574,7 +594,36 @@ public class OrderService {
                 order.getCustomerNote(),
                 lines,
                 order.getCreatedAt(),
-                order.getUpdatedAt()
+                order.getUpdatedAt(),
+                preparationStartedAt,
+                estimatedPreparationMinutes,
+                estimatedPreparationCompletionAt,
+                restaurantAddress,
+                buildGoogleMapsDirectionsUrl(
+                        restaurantAddress,
+                        order.getDeliveryAddress())
         );
+    }
+
+
+
+    private String buildGoogleMapsDirectionsUrl(
+            String restaurantAddress,
+            String deliveryAddress) {
+
+        if (restaurantAddress == null || restaurantAddress.isBlank()
+                || deliveryAddress == null || deliveryAddress.isBlank()) {
+            return null;
+        }
+
+        String origin = URLEncoder.encode(
+                restaurantAddress, StandardCharsets.UTF_8);
+        String destination = URLEncoder.encode(
+                deliveryAddress, StandardCharsets.UTF_8);
+
+        return "https://www.google.com/maps/dir/?api=1"
+                + "&origin=" + origin
+                + "&destination=" + destination
+                + "&travelmode=driving";
     }
 }

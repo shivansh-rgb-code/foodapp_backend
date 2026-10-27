@@ -15,6 +15,9 @@ public class CustomerOrder {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name = "preparation_started_at")
+    private Instant preparationStartedAt;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private UserProfile customer;
@@ -183,5 +186,13 @@ public class CustomerOrder {
 
     public void setDeliveryPartner(DeliveryPartner deliveryPartner) {
         this.deliveryPartner = deliveryPartner;
+    }
+
+    public Instant getPreparationStartedAt() {
+        return preparationStartedAt;
+    }
+
+    public void setPreparationStartedAt(Instant preparationStartedAt) {
+        this.preparationStartedAt = preparationStartedAt;
     }
 }

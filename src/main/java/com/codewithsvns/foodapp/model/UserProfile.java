@@ -62,6 +62,10 @@ public class UserProfile {
         return fullName;
     }
 
+    public void updateFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
     public UserRole getRole() {
         return role;
     }

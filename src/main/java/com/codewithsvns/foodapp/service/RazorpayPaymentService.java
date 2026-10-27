@@ -197,8 +197,16 @@ public class RazorpayPaymentService {
                     .movePointRight(2)
                     .longValueExact();
 
-            long actualAmount =
-                    Long.parseLong(String.valueOf(payment.get("amount")));
+            Object amountValue = payment.get("amount");
+
+            if (!(amountValue instanceof Number amountNumber)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid payment amount returned by Razorpay"
+                );
+            }
+
+            long actualAmount = amountNumber.longValue();
 
             if (!savedOrderId.equals(actualOrderId)) {
                 throw new ResponseStatusException(
