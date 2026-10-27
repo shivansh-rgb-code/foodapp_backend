@@ -44,14 +44,38 @@ public class Restaurant {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    protected Restaurant() {
-    }
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
 
     public Restaurant(UserProfile owner, String name, String address) {
         this.owner = owner;
         this.name = name;
         this.address = address;
     }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
+
+    protected Restaurant() {
+    }
+
+
 
     @jakarta.persistence.PrePersist
     protected void onCreate() {

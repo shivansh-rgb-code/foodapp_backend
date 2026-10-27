@@ -76,8 +76,7 @@ public class RegistrationService {
             );
         }
 
-        // Supabase can return the user directly at the top level
-        // instead of wrapping it inside a "user" property.
+
         Object userObject = result.get("user");
         Map<?, ?> user;
 

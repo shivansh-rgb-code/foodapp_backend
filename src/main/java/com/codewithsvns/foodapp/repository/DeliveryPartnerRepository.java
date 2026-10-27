@@ -8,12 +8,15 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface DeliveryPartnerRepository extends JpaRepository<DeliveryPartner, UUID> {
 
     Optional<DeliveryPartner> findByUserProfile_Id(UUID userId);
+
+    List<DeliveryPartner> findByAvailableTrueAndLatitudeIsNotNullAndLongitudeIsNotNull();
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from DeliveryPartner d where d.userProfile.id = :userId")

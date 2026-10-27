@@ -2,9 +2,9 @@
 package com.codewithsvns.foodapp.service;
 
 import com.codewithsvns.foodapp.model.CustomerOrder;
+import com.codewithsvns.foodapp.model.OrderStatus;
 import com.codewithsvns.foodapp.model.PaymentMethod;
 import com.codewithsvns.foodapp.model.PaymentStatus;
-import com.codewithsvns.foodapp.model.OrderStatus;
 import com.codewithsvns.foodapp.repository.CustomerOrderRepository;
 import com.razorpay.Order;
 import com.razorpay.Payment;
@@ -12,33 +12,39 @@ import com.razorpay.RazorpayClient;
 import com.razorpay.RazorpayException;
 import com.razorpay.Utils;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import java.util.UUID;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.UUID;
 
 @Service
 public class RazorpayPaymentService {
 
     private static final Logger log =
             LoggerFactory.getLogger(RazorpayPaymentService.class);
+
     private final RazorpayClient razorpayClient;
     private final CustomerOrderRepository customerOrderRepository;
+    private final OrderService orderService;
 
     @Value("${razorpay.key.secret}")
     private String razorpayKeySecret;
 
     public RazorpayPaymentService(
             RazorpayClient razorpayClient,
-            CustomerOrderRepository customerOrderRepository) {
+            CustomerOrderRepository customerOrderRepository,
+            OrderService orderService) {
+
         this.razorpayClient = razorpayClient;
         this.customerOrderRepository = customerOrderRepository;
+        this.orderService = orderService;
     }
 
     @Transactional
@@ -106,7 +112,10 @@ public class RazorpayPaymentService {
             request.put("receipt", lockedOrder.getId().toString());
 
             JSONObject notes = new JSONObject();
-            notes.put("customer_order_id", lockedOrder.getId().toString());
+            notes.put(
+                    "customer_order_id",
+                    lockedOrder.getId().toString()
+            );
             request.put("notes", notes);
 
             Order razorpayOrder = razorpayClient.orders.create(request);
@@ -144,31 +153,41 @@ public class RazorpayPaymentService {
         CustomerOrder customerOrder = customerOrderRepository
                 .findByIdAndCustomerIdForUpdate(orderId, customerId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"));
+                        HttpStatus.NOT_FOUND,
+                        "Order not found"
+                ));
 
         if (customerOrder.getPaymentMethod() != PaymentMethod.RAZORPAY) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "This order does not use Razorpay");
+                    "This order does not use Razorpay"
+            );
         }
+
 
         if (customerOrder.getPaymentStatus() == PaymentStatus.PAID) {
             if (razorpayPaymentId != null
-                    && razorpayPaymentId.equals(customerOrder.getRazorpayPaymentId())) {
+                    && razorpayPaymentId.equals(
+                    customerOrder.getRazorpayPaymentId())) {
+
+                orderService.confirmPaidRazorpayOrder(customerOrder);
                 return PaymentStatus.PAID;
             }
 
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "This order has already been paid with another payment");
+                    "This order has already been paid with another payment"
+            );
         }
 
         String savedOrderId = customerOrder.getRazorpayOrderId();
 
-        if (savedOrderId == null || !savedOrderId.equals(submittedOrderId)) {
+        if (savedOrderId == null
+                || !savedOrderId.equals(submittedOrderId)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Razorpay order ID does not match this order");
+                    "Razorpay order ID does not match this order"
+            );
         }
 
         try {
@@ -178,15 +197,20 @@ public class RazorpayPaymentService {
             options.put("razorpay_signature", razorpaySignature);
 
             boolean validSignature =
-                    Utils.verifyPaymentSignature(options, razorpayKeySecret);
+                    Utils.verifyPaymentSignature(
+                            options,
+                            razorpayKeySecret
+                    );
 
             if (!validSignature) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Razorpay payment signature is invalid");
+                        "Razorpay payment signature is invalid"
+                );
             }
 
-            Payment payment = razorpayClient.payments.fetch(razorpayPaymentId);
+            Payment payment =
+                    razorpayClient.payments.fetch(razorpayPaymentId);
 
             String actualOrderId = payment.get("order_id");
             String actualStatus = payment.get("status");
@@ -211,20 +235,23 @@ public class RazorpayPaymentService {
             if (!savedOrderId.equals(actualOrderId)) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Payment belongs to a different Razorpay order");
+                        "Payment belongs to a different Razorpay order"
+                );
             }
 
             if (!"captured".equals(actualStatus)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "Payment is not captured yet");
+                        "Payment is not captured yet"
+                );
             }
 
             if (!"INR".equals(actualCurrency)
                     || actualAmount != expectedAmount) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Payment currency or amount does not match the order");
+                        "Payment currency or amount does not match the order"
+                );
             }
 
             customerOrder.setRazorpayPaymentId(razorpayPaymentId);
@@ -232,17 +259,28 @@ public class RazorpayPaymentService {
 
             customerOrderRepository.save(customerOrder);
 
+
+            orderService.confirmPaidRazorpayOrder(customerOrder);
+
             return PaymentStatus.PAID;
 
-        } catch (RazorpayException e) {
+        } catch (RazorpayException exception) {
+            log.error(
+                    "Razorpay payment verification failed for order {}",
+                    orderId,
+                    exception
+            );
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
-                    "Unable to verify payment with Razorpay");
-        } catch (ArithmeticException | NumberFormatException e) {
+                    "Unable to verify payment with Razorpay"
+            );
+
+        } catch (ArithmeticException | NumberFormatException exception) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Invalid payment amount");
+                    "Invalid payment amount"
+            );
         }
     }
-
 }

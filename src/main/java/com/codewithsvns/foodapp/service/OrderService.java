@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.time.Instant;
+import java.util.Comparator;
 
 @Service
 public class OrderService {
@@ -179,7 +180,17 @@ public class OrderService {
 
         orderItems.forEach(order::addItem);
 
-        return toResponse(customerOrderRepository.save(order));
+        if (paymentMethod == PaymentMethod.CASH_ON_DELIVERY) {
+            order.setStatus(OrderStatus.CONFIRMED);
+        }
+
+        CustomerOrder savedOrder = customerOrderRepository.save(order);
+
+        if (savedOrder.getStatus() == OrderStatus.CONFIRMED) {
+            autoAssignNearestAvailablePartner(savedOrder);
+        }
+
+        return toResponse(customerOrderRepository.save(savedOrder));
     }
 
     @Transactional(readOnly = true)
@@ -288,6 +299,10 @@ public class OrderService {
         }
 
         order.setStatus(newStatus);
+
+        if (newStatus == OrderStatus.READY_FOR_PICKUP) {
+            autoAssignNearestAvailablePartner(order);
+        }
 
         return toResponse(customerOrderRepository.save(order));
     }
@@ -529,6 +544,99 @@ public class OrderService {
 
         deliveryPartnerRepository.save(partner);
         return toResponse(customerOrderRepository.save(order));
+    }
+
+    private void autoAssignNearestAvailablePartner(CustomerOrder order) {
+        Restaurant restaurant = order.getRestaurant();
+
+        if (restaurant.getLatitude() == null
+                || restaurant.getLongitude() == null) {
+            return;
+        }
+
+        List<DeliveryPartner> candidates =
+                deliveryPartnerRepository
+                        .findByAvailableTrueAndLatitudeIsNotNullAndLongitudeIsNotNull()
+                        .stream()
+                        .filter(partner ->
+                                partner.getLatitude() != null
+                                        && partner.getLongitude() != null)
+                        .sorted(Comparator.comparingDouble(partner ->
+                                calculateDistanceKm(
+                                        restaurant.getLatitude(),
+                                        restaurant.getLongitude(),
+                                        partner.getLatitude(),
+                                        partner.getLongitude())))
+                        .toList();
+
+        for (DeliveryPartner candidate : candidates) {
+
+            DeliveryPartner partner = deliveryPartnerRepository
+                    .findByUserProfileIdForUpdate(
+                            candidate.getUserProfile().getId())
+                    .orElse(null);
+
+            if (partner == null || !partner.isAvailable()) {
+                continue;
+            }
+
+            boolean hasActiveDelivery =
+                    customerOrderRepository
+                            .existsByDeliveryPartner_IdAndStatusIn(
+                                    partner.getId(),
+                                    List.of(
+                                            OrderStatus.READY_FOR_PICKUP,
+                                            OrderStatus.OUT_FOR_DELIVERY));
+
+            if (hasActiveDelivery) {
+                continue;
+            }
+
+            partner.setAvailable(false);
+            order.setDeliveryPartner(partner);
+            deliveryPartnerRepository.save(partner);
+            return;
+        }
+
+
+    }
+
+    @Transactional
+    public void confirmPaidRazorpayOrder(CustomerOrder order) {
+        if (order.getPaymentMethod() != PaymentMethod.RAZORPAY
+                || order.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new IllegalStateException(
+                    "Only paid Razorpay orders can be confirmed");
+        }
+
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.CONFIRMED);
+            autoAssignNearestAvailablePartner(order);
+            customerOrderRepository.save(order);
+        }
+    }
+
+    private double calculateDistanceKm(
+            double lat1,
+            double lon1,
+            double lat2,
+            double lon2) {
+
+        double earthRadiusKm = 6371.0;
+
+        double latDifference = Math.toRadians(lat2 - lat1);
+        double lonDifference = Math.toRadians(lon2 - lon1);
+
+        double a = Math.pow(Math.sin(latDifference / 2), 2)
+                + Math.cos(Math.toRadians(lat1))
+                * Math.cos(Math.toRadians(lat2))
+                * Math.pow(Math.sin(lonDifference / 2), 2);
+
+        double centralAngle = 2 * Math.atan2(
+                Math.sqrt(a),
+                Math.sqrt(1 - a));
+
+        return earthRadiusKm * centralAngle;
     }
 
     private Restaurant getRestaurant(UUID ownerId) {

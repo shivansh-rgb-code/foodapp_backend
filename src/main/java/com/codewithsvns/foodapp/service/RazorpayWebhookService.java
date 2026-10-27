@@ -21,13 +21,17 @@ import java.math.RoundingMode;
 public class RazorpayWebhookService {
 
     private final CustomerOrderRepository customerOrderRepository;
+    private final OrderService orderService;
 
     @Value("${razorpay.webhook.secret}")
     private String webhookSecret;
 
     public RazorpayWebhookService(
-            CustomerOrderRepository customerOrderRepository) {
+            CustomerOrderRepository customerOrderRepository,
+            OrderService orderService) {
+
         this.customerOrderRepository = customerOrderRepository;
+        this.orderService = orderService;
     }
 
     @Transactional
@@ -39,6 +43,7 @@ public class RazorpayWebhookService {
                     "Webhook body and signature are required"
             );
         }
+
 
         try {
             Utils.verifyWebhookSignature(
@@ -56,6 +61,7 @@ public class RazorpayWebhookService {
         JSONObject event = new JSONObject(rawBody);
         String eventType = event.optString("event", "");
 
+
         if (!"payment.captured".equals(eventType)) {
             return;
         }
@@ -65,10 +71,17 @@ public class RazorpayWebhookService {
                 .getJSONObject("payment")
                 .getJSONObject("entity");
 
-        String razorpayOrderId = paymentEntity.optString("order_id", "");
-        String razorpayPaymentId = paymentEntity.optString("id", "");
-        String paymentStatus = paymentEntity.optString("status", "");
-        String currency = paymentEntity.optString("currency", "");
+        String razorpayOrderId =
+                paymentEntity.optString("order_id", "");
+
+        String razorpayPaymentId =
+                paymentEntity.optString("id", "");
+
+        String paymentStatus =
+                paymentEntity.optString("status", "");
+
+        String currency =
+                paymentEntity.optString("currency", "");
 
         if (razorpayOrderId.isBlank()
                 || razorpayPaymentId.isBlank()
@@ -110,6 +123,7 @@ public class RazorpayWebhookService {
                     .longValueExact();
 
             receivedAmount = paymentEntity.getLong("amount");
+
         } catch (ArithmeticException exception) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -117,15 +131,18 @@ public class RazorpayWebhookService {
             );
         }
 
-        if (!"INR".equals(currency) || receivedAmount != expectedAmount) {
+        if (!"INR".equals(currency)
+                || receivedAmount != expectedAmount) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Payment amount or currency does not match the order"
             );
         }
 
+
         if (order.getPaymentStatus() == PaymentStatus.PAID) {
             if (razorpayPaymentId.equals(order.getRazorpayPaymentId())) {
+                orderService.confirmPaidRazorpayOrder(order);
                 return;
             }
 
@@ -137,6 +154,10 @@ public class RazorpayWebhookService {
 
         order.setRazorpayPaymentId(razorpayPaymentId);
         order.setPaymentStatus(PaymentStatus.PAID);
+
         customerOrderRepository.save(order);
+
+
+        orderService.confirmPaidRazorpayOrder(order);
     }
 }
