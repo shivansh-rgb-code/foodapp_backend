@@ -52,16 +52,6 @@ public class RegistrationService {
         String normalizedEmail = email.trim().toLowerCase();
         String normalizedName = name.trim();
 
-        pendingRepository.findByEmail(normalizedEmail).ifPresent(pending -> {
-            if (pending.isExpired()) {
-                pendingRepository.delete(pending);
-            } else {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "A registration is already pending for this email. Verify it or wait for it to expire."
-                );
-            }
-        });
 
         Map<String, Object> result = authService.signUp(
                 normalizedName,
@@ -75,7 +65,6 @@ public class RegistrationService {
                     "The authentication service returned an empty response."
             );
         }
-
 
         Object userObject = result.get("user");
         Map<?, ?> user;
@@ -118,6 +107,19 @@ public class RegistrationService {
                     "The authentication service returned an unexpected email address."
             );
         }
+
+
+        pendingRepository.findByEmail(normalizedEmail).ifPresent(pending -> {
+            if (pending.isExpired()) {
+                pendingRepository.delete(pending);
+            } else {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "A registration is already pending for this email. Verify it or wait for it to expire."
+                );
+            }
+        });
+
 
         pendingRepository.save(new PendingRegistration(
                 normalizedEmail,

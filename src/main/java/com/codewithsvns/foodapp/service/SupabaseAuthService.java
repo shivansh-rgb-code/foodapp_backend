@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
-
+import java.util.Collection;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -74,12 +74,46 @@ public class SupabaseAuthService {
     }
 
 
+
+
     public Map<String, Object> signUp(String name, String email, String password) {
-        return post("/auth/v1/signup", Map.of(
+        Map<String, Object> result = post("/auth/v1/signup", Map.of(
                 "email", normalizeEmail(email),
                 "password", password,
-                "data", Map.of("full_name", name)));
+                "data", Map.of("full_name", name)
+        ));
+
+        if (result != null) {
+            Object userObject = result.get("user");
+
+            if (userObject instanceof Map<?, ?> user
+                    && hasEmptyIdentities(user)) {
+                throw duplicateEmailException();
+            }
+
+            if (hasEmptyIdentities(result)) {
+                throw duplicateEmailException();
+            }
+        }
+
+        return result;
     }
+
+    private boolean hasEmptyIdentities(Map<?, ?> user) {
+        Object identitiesObject = user.get("identities");
+
+        return identitiesObject instanceof Collection<?> identities
+                && identities.isEmpty();
+    }
+
+    private AuthException duplicateEmailException() {
+        return new AuthException(
+                HttpStatus.CONFLICT,
+                "An account already exists with this email"
+        );
+    }
+
+
 
     public Map<String, Object> logIn(String email, String password) {
         return post("/auth/v1/token?grant_type=password", Map.of(
@@ -237,9 +271,12 @@ public class SupabaseAuthService {
             return new AuthException(HttpStatus.FORBIDDEN,
                     "Please verify your email address before logging in.");
         }
-        if (errorCode.equals("user_already_exists") || errorCode.equals("email_exists")) {
-            return new AuthException(HttpStatus.CONFLICT,
-                    "An account with this email already exists.");
+        if (errorCode.equals("user_already_exists")
+                || errorCode.equals("email_exists")) {
+            return new AuthException(
+                    HttpStatus.CONFLICT,
+                    "An account already exists with this email"
+            );
         }
         if (status == 429) {
             return new AuthException(HttpStatus.TOO_MANY_REQUESTS,

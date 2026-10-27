@@ -357,6 +357,18 @@ public class AuthController {
     }
 
 
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatusException(
+            ResponseStatusException ex) {
+
+        String message = ex.getReason() != null
+                ? ex.getReason()
+                : "Request could not be completed.";
+
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(Map.of("message", message));
+    }
+
 
     private void startSocialLogin(String provider, HttpServletResponse response)
             throws IOException {
