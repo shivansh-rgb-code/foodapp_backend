@@ -11,7 +11,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import org.springframework.web.bind.annotation.RequestBody;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,15 +43,30 @@ public class RestaurantController {
             String cuisine) {
     }
 
+    public record LocationRequest(
+            @NotNull(message = "Latitude is required")
+            @DecimalMin(value = "-90.0")
+            @DecimalMax(value = "90.0")
+            Double latitude,
+
+            @NotNull(message = "Longitude is required")
+            @DecimalMin(value = "-180.0")
+            @DecimalMax(value = "180.0")
+            Double longitude) {
+    }
+
     public record RestaurantResponse(
             UUID id,
             String name,
             String address,
             boolean open,
             String status,
-            java.time.Instant createdAt,
-            String cuisine) {
-    }
+            Instant createdAt,
+            String cuisine,
+            Double latitude,
+            Double longitude,
+            String imageUrl
+    ) {}
 
     @GetMapping("/me")
     public RestaurantResponse getMyRestaurant(Authentication authentication) {
@@ -105,6 +123,47 @@ public class RestaurantController {
         return toResponse(saved);
     }
 
+    @PatchMapping("/me/location")
+    public RestaurantResponse updateLocation(
+            Authentication authentication,
+            @Valid @RequestBody LocationRequest request) {
+
+        UUID ownerId = getAuthenticatedUserId(authentication);
+
+        Restaurant restaurant = restaurantRepository.findByOwner_Id(ownerId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No restaurant is associated with this account."));
+
+        restaurant.setLatitude(request.latitude());
+        restaurant.setLongitude(request.longitude());
+
+        return toResponse(restaurantRepository.save(restaurant));
+    }
+
+
+    @PatchMapping("/me/image")
+    public RestaurantResponse updateImage(
+            Authentication authentication,
+            @Valid @RequestBody RestaurantImageRequest request
+    ) {
+        UUID userId = getAuthenticatedUserId(authentication);
+
+        Restaurant restaurant = restaurantRepository.findByOwner_Id(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Restaurant not found"
+                ));
+
+        restaurant.setImageUrl(
+                request.imageUrl() == null || request.imageUrl().isBlank()
+                        ? null
+                        : request.imageUrl().trim()
+        );
+
+        return toResponse(restaurantRepository.save(restaurant));
+    }
+
+
     private UUID getAuthenticatedUserId(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(
@@ -136,8 +195,17 @@ public class RestaurantController {
                 restaurant.getName(),
                 restaurant.getAddress(),
                 restaurant.isOpen(),
-                restaurant.getStatus().name(),
+                restaurant.getStatus().toString(),
                 restaurant.getCreatedAt(),
-                restaurant.getCuisine());
+                restaurant.getCuisine(),
+                restaurant.getLatitude(),
+                restaurant.getLongitude(),
+                restaurant.getImageUrl()
+        );
     }
+
+    public record RestaurantImageRequest(
+            @jakarta.validation.constraints.Size(max = 1000)
+            String imageUrl
+    ) {}
 }

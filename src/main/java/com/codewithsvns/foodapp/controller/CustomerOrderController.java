@@ -10,6 +10,7 @@ import com.codewithsvns.foodapp.model.PaymentStatus;
 import com.codewithsvns.foodapp.repository.CustomerOrderRepository;
 import com.codewithsvns.foodapp.service.OrderService;
 import com.codewithsvns.foodapp.service.RazorpayPaymentService;
+import com.codewithsvns.foodapp.dto.OrderTrackingResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -133,6 +134,15 @@ public class CustomerOrderController {
         UUID customerId = getAuthenticatedCustomerId(authentication);
 
         return orderService.getMyOrder(customerId, orderId);
+    }
+
+    @GetMapping("/{orderId}/tracking")
+    public OrderTrackingResponse getOrderTracking(
+            Authentication authentication,
+            @PathVariable UUID orderId) {
+
+        UUID customerId = getAuthenticatedCustomerId(authentication);
+        return orderService.getOrderTracking(customerId, orderId);
     }
 
     @PostMapping("/{orderId}/payment/verify")

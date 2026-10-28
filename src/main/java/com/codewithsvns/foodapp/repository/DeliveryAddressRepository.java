@@ -15,5 +15,7 @@ public interface DeliveryAddressRepository extends JpaRepository<DeliveryAddress
 
     Optional<DeliveryAddress> findByUser_IdAndIsDefaultTrue(UUID userId);
 
+    void deleteByUser_Id(UUID userId);
+
     long countByUser_Id(UUID userId);
 }

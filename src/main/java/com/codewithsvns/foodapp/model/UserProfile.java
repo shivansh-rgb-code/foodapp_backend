@@ -62,6 +62,11 @@ public class UserProfile {
         return fullName;
     }
 
+    public void markDeleted() {
+        this.fullName = "Deleted account";
+        this.accountStatus = AccountStatus.DELETED;
+    }
+
     public void updateFullName(String fullName) {
         this.fullName = fullName;
     }

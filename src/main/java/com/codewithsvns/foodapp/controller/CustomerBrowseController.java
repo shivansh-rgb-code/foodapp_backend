@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -124,7 +125,8 @@ public class CustomerBrowseController {
                 restaurant.isOpen(),
                 restaurant.getStatus().name(),
                 restaurant.getCreatedAt(),
-                restaurant.getCuisine()
+                restaurant.getCuisine(),
+                restaurant.getImageUrl()
         );
     }
 
@@ -148,8 +150,8 @@ public class CustomerBrowseController {
             String address,
             boolean open,
             String status,
-            java.time.Instant createdAt,
-            String cuisine
-    ) {
-    }
+            Instant createdAt,
+            String cuisine,
+            String imageUrl
+    ) {}
 }

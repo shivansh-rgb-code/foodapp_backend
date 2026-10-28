@@ -25,7 +25,7 @@ public class SupabaseAuthService {
     public static final String ACCESS_COOKIE = "sb-access-token";
     public static final String REFRESH_COOKIE = "sb-refresh-token";
     public static final String VERIFIER_COOKIE = "pkce-verifier";
-
+    private final RestClient supabaseAdmin;
     private final RestClient supabase;
     private final UserProfileService userProfileService;
     private final String supabaseUrl;
@@ -37,7 +37,8 @@ public class SupabaseAuthService {
             @Value("${supabase.url}") String supabaseUrl,
             @Value("${supabase.anon-key}") String anonKey,
             @Value("${app.backend-url}") String backendUrl,
-            @Value("${app.password-reset-redirect-url}") String passwordResetRedirectUrl) {
+            @Value("${app.password-reset-redirect-url}") String passwordResetRedirectUrl,
+            @Value("${supabase.service-role-key}") String serviceRoleKey) {
 
         this.userProfileService = userProfileService;
         this.supabaseUrl = stripTrailingSlash(supabaseUrl);
@@ -49,8 +50,35 @@ public class SupabaseAuthService {
                 .baseUrl(this.supabaseUrl)
                 .defaultHeader("apikey", anonKey)
                 .build();
+
+        this.supabaseAdmin = RestClient.builder()
+                .baseUrl(this.supabaseUrl)
+                .defaultHeader("apikey", serviceRoleKey)
+                .defaultHeader("Authorization", "Bearer " + serviceRoleKey)
+                .build();
     }
 
+    public void deleteAuthUser(UUID userId) {
+        try {
+            supabaseAdmin.delete()
+                    .uri("/auth/v1/admin/users/{userId}", userId)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return; // Already deleted; safe to retry.
+            }
+            throw new AuthException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Could not complete account deletion. Please try again."
+            );
+        } catch (RestClientException ex) {
+            throw new AuthException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Authentication service is unreachable. Please try again."
+            );
+        }
+    }
 
     public void updatePassword(String accessToken, String newPassword) {
         try {

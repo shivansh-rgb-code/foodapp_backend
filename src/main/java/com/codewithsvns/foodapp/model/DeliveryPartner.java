@@ -38,6 +38,9 @@ public class DeliveryPartner {
     @Column(name = "longitude")
     private Double longitude;
 
+    @Column(name = "location_updated_at")
+    private Instant locationUpdatedAt;
+
     protected DeliveryPartner() {
     }
 
@@ -87,5 +90,13 @@ public class DeliveryPartner {
 
     public void setAvailable(boolean available) {
         this.available = available;
+    }
+
+    public Instant getLocationUpdatedAt() {
+        return locationUpdatedAt;
+    }
+
+    public void setLocationUpdatedAt(Instant locationUpdatedAt) {
+        this.locationUpdatedAt = locationUpdatedAt;
     }
 }

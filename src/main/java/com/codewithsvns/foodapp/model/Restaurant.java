@@ -49,6 +49,9 @@ public class Restaurant {
     @Column(name = "longitude")
     private Double longitude;
 
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
+
     @Column(name = "cuisine", length = 60)
     private String cuisine;
 
@@ -126,5 +129,13 @@ public class Restaurant {
 
     public void setStatus(RestaurantStatus status) {
         this.status = status;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 }

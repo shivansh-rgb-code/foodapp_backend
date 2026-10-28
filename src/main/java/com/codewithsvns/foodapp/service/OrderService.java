@@ -1,5 +1,6 @@
 package com.codewithsvns.foodapp.service;
-
+import com.codewithsvns.foodapp.dto.OrderTrackingResponse;
+import org.springframework.context.ApplicationEventPublisher;
 import com.codewithsvns.foodapp.dto.AvailableDeliveryOrderResponse;
 import com.codewithsvns.foodapp.dto.OrderLineRequest;
 import com.codewithsvns.foodapp.dto.OrderResponse;
@@ -37,7 +38,7 @@ public class OrderService {
     private final DeliveryPartnerRepository deliveryPartnerRepository;
     private final RegistrationService registrationService;
     private final DeliveryAddressLookupRepository deliveryAddressLookupRepository;
-
+    private final ApplicationEventPublisher eventPublisher;
     public OrderService(
             CustomerOrderRepository customerOrderRepository,
             FoodItemRepository foodItemRepository,
@@ -45,7 +46,8 @@ public class OrderService {
             UserProfileRepository userProfileRepository,
             DeliveryPartnerRepository deliveryPartnerRepository,
             RegistrationService registrationService,
-            DeliveryAddressLookupRepository deliveryAddressLookupRepository) {
+            DeliveryAddressLookupRepository deliveryAddressLookupRepository,
+            ApplicationEventPublisher eventPublisher) {
 
         this.customerOrderRepository = customerOrderRepository;
         this.foodItemRepository = foodItemRepository;
@@ -54,6 +56,7 @@ public class OrderService {
         this.deliveryPartnerRepository = deliveryPartnerRepository;
         this.registrationService = registrationService;
         this.deliveryAddressLookupRepository = deliveryAddressLookupRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -196,9 +199,7 @@ public class OrderService {
 
         CustomerOrder savedOrder = customerOrderRepository.save(order);
 
-        if (savedOrder.getStatus() == OrderStatus.CONFIRMED) {
-            autoAssignNearestAvailablePartner(savedOrder);
-        }
+
 
         return toResponse(customerOrderRepository.save(savedOrder));
     }
@@ -229,6 +230,46 @@ public class OrderService {
                         "Order not found"));
 
         return toResponse(order);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderTrackingResponse getOrderTracking(
+            UUID customerId,
+            UUID orderId) {
+
+        Map<String, Object> session = sessionFor(customerId);
+        registrationService.requireActiveProfile(session);
+        registrationService.requireRole(session, UserRole.CUSTOMER);
+
+        CustomerOrderRepository.OrderTrackingInfo tracking =
+                customerOrderRepository.findTrackingInfo(orderId, customerId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Order not found"));
+
+        boolean assigned = tracking.getDeliveryPartnerId() != null;
+
+        boolean locationVisible =
+                tracking.getStatus() == OrderStatus.READY_FOR_PICKUP
+                        || tracking.getStatus() == OrderStatus.OUT_FOR_DELIVERY;
+
+        if (!assigned || !locationVisible) {
+            return new OrderTrackingResponse(
+                    orderId,
+                    tracking.getStatus(),
+                    assigned,
+                    null,
+                    null,
+                    null);
+        }
+
+        return new OrderTrackingResponse(
+                orderId,
+                tracking.getStatus(),
+                true,
+                tracking.getDeliveryPartnerLatitude(),
+                tracking.getDeliveryPartnerLongitude(),
+                tracking.getLocationUpdatedAt());
     }
 
     @Transactional(readOnly = true)
@@ -334,26 +375,6 @@ public class OrderService {
         registrationService.requireActiveProfile(partnerSession);
         registrationService.requireRole(partnerSession, UserRole.DELIVERY_PARTNER);
 
-        DeliveryPartner partner = deliveryPartnerRepository
-                .findByUserProfileIdForUpdate(deliveryPartnerUserId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Delivery partner profile not found"));
-
-        if (!partner.isAvailable()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "This delivery partner is not available");
-        }
-
-        if (customerOrderRepository.existsByDeliveryPartner_IdAndStatusIn(
-                partner.getId(),
-                List.of(OrderStatus.READY_FOR_PICKUP, OrderStatus.OUT_FOR_DELIVERY))) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "This delivery partner already has an active delivery");
-        }
-
         CustomerOrder order = customerOrderRepository
                 .findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -376,6 +397,26 @@ public class OrderService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "A delivery partner is already assigned to this order");
+        }
+
+        DeliveryPartner partner = deliveryPartnerRepository
+                .findByUserProfileIdForUpdate(deliveryPartnerUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Delivery partner profile not found"));
+
+        if (!partner.isAvailable()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This delivery partner is not available");
+        }
+
+        if (customerOrderRepository.existsByDeliveryPartner_IdAndStatusIn(
+                partner.getId(),
+                List.of(OrderStatus.READY_FOR_PICKUP, OrderStatus.OUT_FOR_DELIVERY))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This delivery partner already has an active delivery");
         }
 
         partner.setAvailable(false);
@@ -418,16 +459,19 @@ public class OrderService {
                 session,
                 UserRole.DELIVERY_PARTNER);
 
-        DeliveryPartner partner = deliveryPartnerRepository
-                .findByUserProfileIdForUpdate(deliveryPartnerUserId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Delivery partner profile not found"));
-
         CustomerOrder order = customerOrderRepository
                 .findByIdForUpdate(orderId)
                 .filter(o -> o.getDeliveryPartner() != null
-                        && o.getDeliveryPartner().getId().equals(partner.getId()))
+                        && o.getDeliveryPartner().getUserProfile().getId()
+                        .equals(deliveryPartnerUserId))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Assigned order not found"));
+
+        DeliveryPartner partner = deliveryPartnerRepository
+                .findByUserProfileIdForUpdate(deliveryPartnerUserId)
+                .filter(lockedPartner -> lockedPartner.getId()
+                        .equals(order.getDeliveryPartner().getId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Assigned order not found"));
@@ -511,6 +555,24 @@ public class OrderService {
         registrationService.requireActiveProfile(session);
         registrationService.requireRole(session, UserRole.DELIVERY_PARTNER);
 
+        CustomerOrder order = customerOrderRepository
+                .findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Delivery order not found"));
+
+        if (order.getStatus() != OrderStatus.READY_FOR_PICKUP) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This order is not ready for pickup");
+        }
+
+        if (order.getDeliveryPartner() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This order has already been assigned");
+        }
+
         DeliveryPartner partner = deliveryPartnerRepository
                 .findByUserProfileIdForUpdate(deliveryPartnerUserId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -531,24 +593,6 @@ public class OrderService {
                     "You already have an active delivery");
         }
 
-        CustomerOrder order = customerOrderRepository
-                .findByIdForUpdate(orderId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Delivery order not found"));
-
-        if (order.getStatus() != OrderStatus.READY_FOR_PICKUP) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "This order is not ready for pickup");
-        }
-
-        if (order.getDeliveryPartner() != null) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "This order has already been assigned");
-        }
-
         partner.setAvailable(false);
         order.setDeliveryPartner(partner);
 
@@ -558,6 +602,10 @@ public class OrderService {
 
     private void autoAssignNearestAvailablePartner(CustomerOrder order) {
         Restaurant restaurant = order.getRestaurant();
+
+        if (order.getDeliveryPartner() != null) {
+            return;
+        }
 
         if (restaurant.getLatitude() == null
                 || restaurant.getLongitude() == null) {
@@ -605,6 +653,14 @@ public class OrderService {
             partner.setAvailable(false);
             order.setDeliveryPartner(partner);
             deliveryPartnerRepository.save(partner);
+
+            eventPublisher.publishEvent(
+                    new DeliveryOrderAssignedEvent(
+                            partner.getUserProfile().getId(),
+                            order.getId()
+                    )
+            );
+
             return;
         }
 
@@ -621,7 +677,6 @@ public class OrderService {
 
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
-            autoAssignNearestAvailablePartner(order);
             customerOrderRepository.save(order);
         }
     }

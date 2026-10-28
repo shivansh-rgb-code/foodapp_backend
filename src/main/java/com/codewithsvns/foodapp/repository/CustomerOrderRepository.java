@@ -72,6 +72,27 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, UU
             @Param("orderId") UUID orderId,
             @Param("customerId") UUID customerId);
 
+
+    interface OrderTrackingInfo {
+        OrderStatus getStatus();
+        UUID getDeliveryPartnerId();
+        Double getDeliveryPartnerLatitude();
+        Double getDeliveryPartnerLongitude();
+        Instant getLocationUpdatedAt();
+    }
+
+    @Query("select o.status as status, "
+            + "dp.id as deliveryPartnerId, "
+            + "dp.latitude as deliveryPartnerLatitude, "
+            + "dp.longitude as deliveryPartnerLongitude, "
+            + "dp.locationUpdatedAt as locationUpdatedAt "
+            + "from CustomerOrder o "
+            + "left join o.deliveryPartner dp "
+            + "where o.id = :orderId and o.customer.id = :customerId")
+    Optional<OrderTrackingInfo> findTrackingInfo(
+            @Param("orderId") UUID orderId,
+            @Param("customerId") UUID customerId);
+
     @Query("select o.restaurant.id from CustomerOrder o "
             + "where o.customer.id = :customerId "
             + "and o.status = com.codewithsvns.foodapp.model.OrderStatus.DELIVERED "

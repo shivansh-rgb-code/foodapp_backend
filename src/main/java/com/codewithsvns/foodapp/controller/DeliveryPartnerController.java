@@ -12,6 +12,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -41,10 +43,24 @@ public class DeliveryPartnerController {
             Boolean available) {
     }
 
+    public record LocationRequest(
+            @NotNull(message = "Latitude is required")
+            @DecimalMin(value = "-90.0")
+            @DecimalMax(value = "90.0")
+            Double latitude,
+
+            @NotNull(message = "Longitude is required")
+            @DecimalMin(value = "-180.0")
+            @DecimalMax(value = "180.0")
+            Double longitude) {
+    }
+
     public record DeliveryPartnerResponse(
             UUID id,
             boolean available,
-            Instant createdAt) {
+            Instant createdAt,
+            Double latitude,
+            Double longitude) {
     }
 
     @GetMapping("/me")
@@ -99,6 +115,26 @@ public class DeliveryPartnerController {
         return toResponse(saved);
     }
 
+    @PatchMapping("/me/location")
+    @Transactional
+    public DeliveryPartnerResponse updateLocation(
+            Authentication authentication,
+            @Valid @RequestBody LocationRequest request) {
+
+        UUID userId = getAuthenticatedUserId(authentication);
+
+        DeliveryPartner partner = deliveryPartnerRepository
+                .findByUserProfileIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No delivery-partner profile is associated with this account."));
+
+        partner.setLatitude(request.latitude());
+        partner.setLongitude(request.longitude());
+        partner.setLocationUpdatedAt(Instant.now());
+        return toResponse(deliveryPartnerRepository.save(partner));
+    }
+
     private UUID getAuthenticatedUserId(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(
@@ -128,6 +164,8 @@ public class DeliveryPartnerController {
         return new DeliveryPartnerResponse(
                 partner.getId(),
                 partner.isAvailable(),
-                partner.getCreatedAt());
+                partner.getCreatedAt(),
+                partner.getLatitude(),
+                partner.getLongitude());
     }
 }
